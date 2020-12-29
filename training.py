@@ -96,6 +96,14 @@ class State:
         self.player_symbol = 1
         self.isEnd = False
 
+    def get_flip_hash(self):
+        list1 = []
+        for row in self.board:
+            list1.append(np.flip(row))
+        board = np.array(list1)
+        boardHash = str(board.reshape(7 * 6))
+        return boardHash
+
     # give the reward only when game ends
     def giveReward(self):
         result = self.winner()
@@ -130,9 +138,10 @@ class State:
                 # take action and update board state
                 self.updateState(p1_action[0], p1_action[1])
                 board_hash = self.getHash()
+                board_hash2 = self.get_flip_hash()
                 self.player1.addState(board_hash)
+                self.player1.addState(board_hash2)
                 # check board status if it is end
-
                 win = self.winner()
                 if win is not None:
                     # self.showBoard()
@@ -149,8 +158,9 @@ class State:
                     p2_action = self.player2.choose_move(positions, self.board, self.player_symbol)
                     self.updateState(p2_action[0], p2_action[1])
                     board_hash = self.getHash()
+                    board_hash2 = self.get_flip_hash()
                     self.player2.addState(board_hash)
-
+                    self.player2.addState(board_hash2)
                     win = self.winner()
                     if win is not None:
                         # self.showBoard()
@@ -257,12 +267,35 @@ class Player:
                 next_board[slot][p] = player_symbol
                 next_boardHash = self.getHash(next_board)
                 value = 0 if self.states_value.get(next_boardHash) is None else self.states_value.get(next_boardHash)
+                if self.winner(next_board) == player_symbol:
+                    value_max = 999
+                    self.states_value[self.get_flip_hash(next_board)] = 999
+                    move = p
+                    continue
+                opponent_moves = self.available_moves(next_board)
+                for q in opponent_moves:
+                    opponent_board = next_board.copy()
+                    q_slot = self.find_slot(q, opponent_board)
+                    opponent_board[q_slot][q] = player_symbol * -1
+                    if self.winner(opponent_board) == player_symbol * -1:
+                        value = -999
+                        self.states_value[self.get_flip_hash(next_board)] = -999
+                        self.states_value[self.getHash(next_board)] = -999
                 if value >= value_max:
                     value_max = value
                     move = p
-                # find the row (slot)
+        # find the row (slot)
         slot = self.find_slot(move, board)
         return slot, move
+
+    #  find all available columns
+    def available_moves(self, board):
+        # Just check the top row to see if there's space
+        moves = []
+        for i in range(7):
+            if board[0][i] == 0:
+                moves.append(i)
+        return moves
 
     # at the end of game, update states value
     def feedReward(self, reward):
@@ -272,11 +305,68 @@ class Player:
             self.states_value[st] += self.learn_rate * ((self.discount_factor * reward) - self.states_value[st])
             reward = self.states_value[st]
 
+    def get_flip_hash(self, board):
+        list = []
+        for row in board:
+            list.append(np.flip(row))
+        board = np.array(list)
+        boardHash = str(board.reshape(7 * 6))
+        return boardHash
 
-player1_dic = np.load('p1.npy', allow_pickle=True).item()
+    # determine if the current game has ended
+    def winner(self, board):
+        # check rows
+        for row in range(6):
+            # must make 4 checks to cover the whole row
+            for i in range(4):
+                if sum(board[row][0+i:4+i]) == 4:
+                    return 1
+                elif sum(board[row][0+i:4+i]) == -4:
+                    return -1
+        # check columns
+        for column in range(7):
+            # must make 3 checks to cover the whole column
+            for i in range(3):
+                if sum(board.T[column][0+i:4+i]) == 4:
+                    return 1
+                if sum(board.T[column][0+i:4+i]) == -4:
+                    return -1
+        # check diagonals
+        # first diagonal (bottom left to top right)
+        for column in range(3, 7):
+            for row in range(3, 6):
+                total = 0
+                # add up the 4 diagonals
+                for i in range(4):
+                    total += board[row-i][column-i]
+                if total == 4:
+                    return 1
+                if total == -4:
+                    return -1
+        # second diagonal (bottom right to top left)
+        for column in range(3, 7):
+            for row in range(0, 3):
+                total = 0
+                # add up the 4 diagonals
+                for i in range(4):
+                    total += board[row+i][column-i]
+                if total == 4:
+                    isEnd = True
+                    return 1
+                if total == -4:
+                    isEnd = True
+                    return -1
+
+        # Otherwise return nothing
+        return None
+
+
+player1_dic = np.load('p2.npy', allow_pickle=True).item()
 player2_dic = np.load('p2.npy', allow_pickle=True).item()
-p1 = Player('Jo', player1_dic, 0.3)
-p2 = Player('Dave', player2_dic, 0.3)
+
+p1 = Player('Jo', player1_dic, 0.5)
+p2 = Player('Dave', player2_dic, 0.5)
+
 Connect4_game = State(p1, p2)
 
 Connect4_game.play()
