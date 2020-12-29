@@ -9,9 +9,7 @@ Version 2 introduced the following:
 
 1. Checking if a winning move is available and playing it. (This greatly increasing learning efficiency with little cost).
 
-2. An option to check a move in advance if the opponent will have a winning move next turn. 
-This comes at great cost in time since each future move checked correlates with time exponentially. 
-I used this for about 100,000 games and saving the value each time a move was found to be losing so as to save later with normal learning).
+2. An option to check 2 moves ahead for a winning move. This comes at great cost in time and was only used to begin with to save many "lose in 1" positions as possible to be avoided when normal learning commenced.
 
 3. Adding values to the inverted board also i.e when a game is completed and values are given to all positions, they are also given to the flipped version of the board which should have the same value.
 This roughly doubles the efficiency of the learning.
