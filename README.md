@@ -13,3 +13,5 @@ Version 2 introduced the following:
 
 3. Adding values to the inverted board also i.e when a game is completed and values are given to all positions, they are also given to the flipped version of the board which should have the same value.
 This roughly doubles the efficiency of the learning.
+
+4. Now has the option to play like a regular engine that checks for potential win in 1 or 2s.
