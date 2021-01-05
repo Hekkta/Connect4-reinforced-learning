@@ -1,4 +1,7 @@
 import numpy as np
+import time
+import pickle
+from random import randint
 
 # The state class deals with the board and each player class
 class State:
@@ -127,10 +130,15 @@ class State:
     # let the program play against it self and learn
     def play(self, rounds=1000000):
         for i in range(rounds):
-            if i % 10000 == 0:
+            if i % 50000 == 0:
                 print("Rounds {}".format(i))
-                np.save('p1.npy', self.player1.states_value)
-                np.save('p2.npy', self.player2.states_value)
+                outfile1 = open('p1', 'wb')
+                outfile2 = open('p2', 'wb')
+                pickle.dump(self.player1.states_value, outfile1)
+                pickle.dump(self.player2.states_value, outfile2)
+                outfile1.close()
+                outfile2.close()
+                print(str((time.time() - begin)/60) + ' minutes')
             while not self.isEnd:
                 # Player 1
                 positions = self.available_moves()
@@ -170,8 +178,12 @@ class State:
                         self.player2.reset()
                         self.reset()
                         break
-        np.save('p1.npy', self.player1.states_value)
-        np.save('p2.npy', self.player2.states_value)
+        outfile1 = open('p1', 'wb')
+        outfile2 = open('p2', 'wb')
+        pickle.dump(self.player1.states_value, outfile1)
+        pickle.dump(self.player2.states_value, outfile2)
+        outfile1.close()
+        outfile2.close()
 
     # play against a human
     def play_human(self):
@@ -254,36 +266,25 @@ class Player:
 
     # decide on which move to play
     def choose_move(self, moves, board, player_symbol):
+        value_max = -999
+        for p in moves:
+            next_board = board.copy()
+            slot = self.find_slot(p, next_board)
+            next_board[slot][p] = player_symbol
+            next_boardHash = self.getHash(next_board)
+            value = 0 if self.states_value.get(next_boardHash) is None else self.states_value.get(next_boardHash)
+            if self.winner(next_board) == player_symbol:
+                self.states_value[self.get_flip_hash(next_board)] = 999
+                move = p
+                slot = self.find_slot(move, board)
+                return slot, move
+            if value >= value_max:
+                value_max = value
+                move = p
         # Make a random move some of the time
         if np.random.uniform(0, 1) <= self.exp_rate:
             i = np.random.choice(len(moves))
             move = moves[i]
-
-        else:
-            value_max = -999
-            for p in moves:
-                next_board = board.copy()
-                slot = self.find_slot(p, next_board)
-                next_board[slot][p] = player_symbol
-                next_boardHash = self.getHash(next_board)
-                value = 0 if self.states_value.get(next_boardHash) is None else self.states_value.get(next_boardHash)
-                if self.winner(next_board) == player_symbol:
-                    value_max = 999
-                    self.states_value[self.get_flip_hash(next_board)] = 999
-                    move = p
-                    continue
-                opponent_moves = self.available_moves(next_board)
-                for q in opponent_moves:
-                    opponent_board = next_board.copy()
-                    q_slot = self.find_slot(q, opponent_board)
-                    opponent_board[q_slot][q] = player_symbol * -1
-                    if self.winner(opponent_board) == player_symbol * -1:
-                        value = -999
-                        self.states_value[self.get_flip_hash(next_board)] = -999
-                        self.states_value[self.getHash(next_board)] = -999
-                if value >= value_max:
-                    value_max = value
-                    move = p
         # find the row (slot)
         slot = self.find_slot(move, board)
         return slot, move
@@ -296,6 +297,64 @@ class Player:
             if board[0][i] == 0:
                 moves.append(i)
         return moves
+
+    def engine_choose_move(self, moves, board, player_symbol):
+        moves_list = moves.copy()
+        for p in moves:
+            next_board = board.copy()
+            slot = self.find_slot(p, next_board)
+            next_board[slot][p] = player_symbol
+            if self.winner(next_board) == player_symbol:
+                move = p
+                slot = self.find_slot(move, board)
+                return slot, move
+            opponent_moves = self.available_moves(next_board)
+            for q in opponent_moves:
+                # print('2 move ahead')
+                opponent_board = next_board.copy()
+                q_slot = self.find_slot(q, opponent_board)
+                opponent_board[q_slot][q] = player_symbol * -1
+                if self.winner(opponent_board) == player_symbol * -1:
+                    moves_list.remove(p)
+                    break
+                win_in_2 = 0
+                lose_boolean1 = True
+                my_moves = self.available_moves(opponent_board)
+                for r in my_moves:
+                    # print('3 move ahead')
+                    my_board = opponent_board.copy()
+                    r_slot = self.find_slot(r, opponent_board)
+                    my_board[r_slot][r] = player_symbol
+                    if self.winner(next_board) == player_symbol:
+                        win_in_2 += 1
+                        continue
+                    final_moves = self.available_moves(my_board)
+                    lose_boolean2 = False
+                    for s in final_moves:
+                        final_board = my_board.copy()
+                        s_slot = self.find_slot(s, my_board)
+                        final_board[s_slot][s] = player_symbol * -1
+                        if self.winner(final_board) == player_symbol * -1:
+                            lose_boolean2 = True
+                    if not lose_boolean2:
+                        lose_boolean1 = False
+                if win_in_2 == len(moves):
+                    move = p
+                    slot = self.find_slot(move, board)
+                    return slot, move
+                if lose_boolean1:
+                    moves_list.remove(p)
+                    break
+        if len(moves_list) < 1:
+            pick = randint(0, len(moves)-1)
+            move = moves[pick]
+            slot = self.find_slot(move, board)
+            return slot, move
+        pick = randint(0, len(moves_list)-1)
+        move = moves_list[pick]
+        slot = self.find_slot(move, board)
+        print('last return')
+        return slot, move
 
     # at the end of game, update states value
     def feedReward(self, reward):
@@ -361,8 +420,16 @@ class Player:
         return None
 
 
-player1_dic = np.load('p2.npy', allow_pickle=True).item()
-player2_dic = np.load('p2.npy', allow_pickle=True).item()
+
+begin = time.time()
+# open the first dictionary
+infile1 = open('p1', 'rb')
+player1_dic = pickle.load(infile1)
+infile1.close()
+# open second dictionary
+infile2 = open('p2', 'rb')
+player2_dic = pickle.load(infile2)
+infile2.close()
 
 p1 = Player('Jo', player1_dic, 0.5)
 p2 = Player('Dave', player2_dic, 0.5)
