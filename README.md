@@ -15,3 +15,5 @@ Version 2 introduced the following:
 This roughly doubles the efficiency of the learning.
 
 4. Now has the option to play like a regular engine that checks for potential win in 1 or 2s.
+
+5. Checks for a winning move before the chance of playing a random move greatly increasing learning speed.
